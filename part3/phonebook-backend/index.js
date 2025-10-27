@@ -2,6 +2,7 @@ const express = require('express')
 const app = express()
 const cors = require('cors')
 const morgan = require('morgan')
+const Person = require('./models/persons')
 
 app.use(cors())
 app.use(express.json())
@@ -20,106 +21,82 @@ const customFormat = ':method :url :status :res[content-length] - :response-time
 
 app.use(morgan(customFormat))
 
-let persons = [
-    {
-        "id": "1",
-        "name": "Arto Hellas",
-        "number": "040-123456"
-    },
-    {
-        "id": "2",
-        "name": "Ada Lovelace",
-        "number": "39-44-52342434"
-    },
-    {
-        "id": "3",
-        "name": "Dan Abramov",
-        "number": "12-56-764764"
-    },
-    {
-        "id": "4",
-        "name": "Mary Poppendieck",
-        "number": "36-78-89876"
-    },
-]
+
 
 // Define API endpoint to fetch the collection of persons
 app.get('/api/persons', (request, response) => {
-    response.json(persons)
+    Person.find({}).then(people => {
+        response.json(people)
+    })
 })
 
 // NEW ROUTE: /info
+// FIX for /info in index.js
 app.get('/info', (request, response) => {
-    const numEntries = persons.length;
 
-    const currentTime = new Date();
+    Person.countDocuments({}).then(count => {
+        // 👇 FIX: Use 'count' directly, remove the undefined 'persons.length'
+        const currentTime = new Date();
 
-    const infoResponse = `
-    <p>Phonebook has info for ${numEntries} people</p>
-    <p>${currentTime}</p>
-    `;
-    response.send(infoResponse);
+        const infoResponse = `
+        <p>Phonebook has info for ${count} people</p>
+        <p>${currentTime}</p>
+        `;
+        response.send(infoResponse);
+    }) 
 })
 
 app.get('/api/persons/:id', (request, response) => {
     const id = request.params.id
 
-    const person = persons.find(p => p.id === id)
-
-    if (person) {
+    Person.findById(id).then(person => {
+        if (person) {
         response.json(person)
     } else {
         response.status(404).end()
     }
+    })
 })
 
 app.get('/api/notes', (request, response) => {
-  // Return the 'persons' data array for the Notes frontend to consume
-  response.json(persons) 
+  Person.find({}).then(people => {
+    response.json(people)
+  }) 
 })
 
+// FIX for DELETE /api/persons/:id
 app.delete('/api/persons/:id', (request, response) => {
     const id = request.params.id
 
-    persons = persons.filter(person => person.id !== id)
-
-    response.status(204).end()
+    // Use Mongoose findByIdAndRemove (or findByIdAndDelete)
+    Person.findByIdAndDelete(id)
+        .then(result => {
+            response.status(204).end() // 204 No Content for successful deletion
+        })
+        .catch(error => {
+            // Log error or send a 500 status if deletion fails for non-404 reasons
+            console.error(error) 
+            response.status(500).json({ error: 'Failed to delete entry' })
+        })
 })
-
-const generateId = () => {
-    const maxId = 100000000000
-    return Math.floor(Math.random() * maxId)
-}
 
 app.post('/api/persons', (request, response) => {
     const body = request.body
 
-    if (!body.name) {
+    if (!body.name || !body.number) {
         return response.status(400).json({
-            error: 'name is missing'
-        })
-    }
-    if (!body.number) {
-        return response.status(400).json({
-            error: 'number is missing'
+            error: 'name or number is missing'
         })
     }
 
-    const nameExists = persons.find(p => p.name === body.name)
-    if (nameExists) {
-        return response.status(400).json({
-            error: 'name must be unique'
-        })
-    }
-
-    const person = {
+    const person = new Person ({
         name: body.name,
         number: body.number,
-        id: String(generateId()),
-    }
-    persons = persons.concat(person)
+    })
 
-    response.json(person)
+    person.save().then(savedPerson => {
+        response.json(savedPerson)
+    })
 })
 
 const PORT = process.env.PORT || 3001
