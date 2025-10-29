@@ -131,7 +131,12 @@ const errorHandler = (error, request, response, next) => {
     if(error.name === 'CastError') {
         // Mongoose ID malformation
         return response.status(400).send({ error: 'malformatted id' })
-    } 
+    }
+
+    if(error.name === 'ValidationError'){
+        // Mongoose Schema validation failed (e.g., number format is wrong)
+        return response.status(400).json({ error: 'Internal Server Error' })
+    }
     
     // FIX: If error is not handled, log it and send a 500 error 
     // instead of calling next(error) which can crash the server flow.
