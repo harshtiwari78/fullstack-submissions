@@ -10,12 +10,6 @@ app.use(express.static('dist'))
 
 app.use(morgan('tiny'))
 
-const customFormat = ':method :url :status :res[content-length] - :response-time ms :body'
-
-app.use(morgan(customFormat))
-
-
-
 // Define API endpoint to fetch the collection of persons
 app.get('/api/persons', (request, response) => {
     Person.find({}).then(people => {
