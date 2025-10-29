@@ -4,11 +4,29 @@ const cors = require('cors')
 const morgan = require('morgan')
 const Person = require('./models/persons')
 
+// --- Middleware Setup ---
+
 app.use(cors())
-app.use(express.json())
+app.use(express.json()) // Required to access req.body
 app.use(express.static('dist'))
 
-app.use(morgan('tiny'))
+// Custom morgan token definition must come before the middleware use
+morgan.token('body', (req, res) => {
+    // Only stringify the body for POST requests to keep logs clean
+    if (req.method === 'POST' && req.body) {
+        return JSON.stringify(req.body);
+    }
+    return '';
+})
+
+// Custom format uses the defined 'body' token
+const customFormat = ':method :url :status :res[content-length] - :response-time ms :body'
+
+// Use the custom morgan format only once
+app.use(morgan(customFormat))
+
+
+// --- Routes ---
 
 // Define API endpoint to fetch the collection of persons
 app.get('/api/persons', (request, response) => {
@@ -17,45 +35,37 @@ app.get('/api/persons', (request, response) => {
     })
 })
 
-// NEW ROUTE: /info
-// FIX for /info in index.js
+// Route: /info
 app.get('/info', (request, response) => {
-
     Person.countDocuments({}).then(count => {
-        // 👇 FIX: Use 'count' directly, remove the undefined 'persons.length'
         const currentTime = new Date();
-
         const infoResponse = `
         <p>Phonebook has info for ${count} people</p>
         <p>${currentTime}</p>
         `;
         response.send(infoResponse);
-    }) 
-})
-``
-app.get('/api/persons/:id', (request, response) => {
-    const id = request.params.id
-
-    Person.findById(id).then(person => {
-        if (person) {
-        response.json(person)
-    } else {
-        response.status(404).end()
-    }
     })
 })
 
-app.get('/api/notes', (request, response) => {
-  Person.find({}).then(people => {
-    response.json(people)
-  }) 
+// Route: Get a single person by ID
+app.get('/api/persons/:id', (request, response, next) => { // Added 'next' here
+    const id = request.params.id
+
+    Person.findById(id)
+        .then(person => {
+            if (person) {
+                response.json(person)
+            } else {
+                response.status(404).end()
+            }
+        })
+        .catch(error => next(error)) // Delegate potential CastError
 })
 
-// FIX for DELETE /api/persons/:id
+// Route: Delete a person
 app.delete('/api/persons/:id', (request, response, next) => {
     const id = request.params.id
 
-    // Use Mongoose findByIdAndRemove (or findByIdAndDelete)
     Person.findByIdAndDelete(id)
         .then(result => {
             response.status(204).end() // 204 No Content for successful deletion
@@ -63,6 +73,7 @@ app.delete('/api/persons/:id', (request, response, next) => {
         .catch(error => next(error))
 })
 
+// Route: Add a new person
 app.post('/api/persons', (request, response) => {
     const body = request.body
 
@@ -82,6 +93,7 @@ app.post('/api/persons', (request, response) => {
     })
 })
 
+// Route: Update a person's number
 app.put('/api/persons/:id', (request, response, next) => {
     const body = request.body
     const id = request.params.id
@@ -91,7 +103,8 @@ app.put('/api/persons/:id', (request, response, next) => {
         number: body.number,
     }
 
-    Person.findByIdAndUpdate(id, person, { new: true })
+    // Run validators on update
+    Person.findByIdAndUpdate(id, person, { new: true, runValidators: true, context: 'query' })
       .then(updatedPerson => {
         if(updatedPerson) {
             response.json(updatedPerson)
@@ -99,25 +112,36 @@ app.put('/api/persons/:id', (request, response, next) => {
             response.status(404).send({ error: 'Person not found' })
         }
       })
-      .catch(error => next(error))
+      .catch(error => next(error)) // Delegate validation or malformed ID errors
 })
 
+
+// --- Error Handling Middleware ---
+
+// Must come after all routes
 const unknownEndpoint = (request, response) => {
     response.status(404).send({ error: 'unknown endpoint' })
 }
 app.use(unknownEndpoint)
 
+// Error handler must be the last loaded middleware, with four arguments
 const errorHandler = (error, request, response, next) => {
     console.error(error.message)
 
     if(error.name === 'CastError') {
+        // Mongoose ID malformation
         return response.status(400).send({ error: 'malformatted id' })
-    }
-
-    next(error)
+    } 
+    
+    // FIX: If error is not handled, log it and send a 500 error 
+    // instead of calling next(error) which can crash the server flow.
+    // If you need to debug other errors, you can add more checks here.
+    return response.status(500).send({ error: 'Internal Server Error' })
 }
 
 app.use(errorHandler)
+
+// --- Server Startup ---
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
