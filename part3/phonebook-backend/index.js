@@ -45,7 +45,7 @@ app.get('/info', (request, response) => {
         response.send(infoResponse);
     }) 
 })
-
+``
 app.get('/api/persons/:id', (request, response) => {
     const id = request.params.id
 
@@ -65,7 +65,7 @@ app.get('/api/notes', (request, response) => {
 })
 
 // FIX for DELETE /api/persons/:id
-app.delete('/api/persons/:id', (request, response) => {
+app.delete('/api/persons/:id', (request, response, next) => {
     const id = request.params.id
 
     // Use Mongoose findByIdAndRemove (or findByIdAndDelete)
@@ -73,11 +73,7 @@ app.delete('/api/persons/:id', (request, response) => {
         .then(result => {
             response.status(204).end() // 204 No Content for successful deletion
         })
-        .catch(error => {
-            // Log error or send a 500 status if deletion fails for non-404 reasons
-            console.error(error) 
-            response.status(500).json({ error: 'Failed to delete entry' })
-        })
+        .catch(error => next(error))
 })
 
 app.post('/api/persons', (request, response) => {
@@ -98,6 +94,23 @@ app.post('/api/persons', (request, response) => {
         response.json(savedPerson)
     })
 })
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+}
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+
+    if(error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id' })
+    }
+
+    next(error)
+}
+
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
