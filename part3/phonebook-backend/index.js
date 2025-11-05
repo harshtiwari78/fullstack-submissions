@@ -74,7 +74,7 @@ app.delete('/api/persons/:id', (request, response, next) => {
 })
 
 // Route: Add a new person
-app.post('/api/persons', (request, response) => {
+app.post('/api/persons', (request, response, next) => {
     const body = request.body
 
     if (!body.name || !body.number) {
