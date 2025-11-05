@@ -19,7 +19,19 @@ mongoose.connect(url)
       minLength: 3,
       required: true
     },
-    number: String,
+    number: {
+      type: String,
+      minLength: 8,
+      required: true,
+      validate: {
+         validator: function(v) {
+            return /^(\d{2}|\d{3})-\d+$/.test(v)
+         },
+         message: props => `${props.value} is not a valid phone number!
+                             Must be 8+ DOMStringList, seperated by '-',
+                             with the first part being 2 or 3 digits (e.g., 09-1234556).`  
+      },
+    }
  })
 
  personSchema.set('toJSON', {
