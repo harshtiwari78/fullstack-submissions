@@ -91,6 +91,7 @@ app.post('/api/persons', (request, response) => {
     person.save().then(savedPerson => {
         response.json(savedPerson)
     })
+    .catch(error => next(error))
 })
 
 // Route: Update a person's number
@@ -135,7 +136,7 @@ const errorHandler = (error, request, response, next) => {
 
     if(error.name === 'ValidationError'){
         // Mongoose Schema validation failed (e.g., number format is wrong)
-        return response.status(400).json({ error: 'Internal Server Error' })
+        return response.status(400).json({ error: error.message })
     }
     
     // FIX: If error is not handled, log it and send a 500 error 
